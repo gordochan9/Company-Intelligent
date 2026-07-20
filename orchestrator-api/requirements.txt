@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+pytest
+httpx
+psycopg[binary]
+langgraph
+openpyxl
+pypdf
+python-docx
+sqlglot

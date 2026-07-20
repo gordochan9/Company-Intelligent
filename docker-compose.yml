@@ -1,0 +1,136 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-project3}
+      POSTGRES_USER: ${POSTGRES_USER:-project3}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - project3-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - project3-network
+
+  orchestrator-api:
+    build:
+      context: ./orchestrator-api
+    command: ["sh", "-c", "python -m app.db.migrate && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-project3}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-project3}
+      CONTAINER_ACTIVE_DATASET_ROOT: ${CONTAINER_ACTIVE_DATASET_ROOT:-/app/active_dataset}
+      AUDIT_LOG_DIR: ${AUDIT_LOG_DIR:-/app/runtime/audit}
+      RUNTIME_LOG_DIR: ${RUNTIME_LOG_DIR:-/app/runtime/logs}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      LLM_MODEL: ${LLM_MODEL:-deepseek-v4-pro}
+      MODEL_NAME: ${MODEL_NAME:-deepseek-v4-pro}
+      JOIN_DISCOVERY_LLM_TIMEOUT_SECONDS: ${JOIN_DISCOVERY_LLM_TIMEOUT_SECONDS:-600}
+      OPENWEBUI_SHARED_SECRET: ${OPENWEBUI_SHARED_SECRET:-}
+    ports:
+      - "${ORCHESTRATOR_PORT:-8003}:8000"
+    volumes:
+      - type: bind
+        source: ${HOST_SHARE_DRIVE_PATH:-./demo_share_drive}
+        target: ${CONTAINER_ACTIVE_DATASET_ROOT:-/app/active_dataset}
+        read_only: true
+      - project3-runtime:/app/runtime
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - project3-network
+
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    profiles: ["openwebui"]
+    environment:
+      WEBUI_AUTH: "true"
+      WEBUI_SECRET_KEY: ${OPENWEBUI_WEBUI_SECRET_KEY:?Set OPENWEBUI_WEBUI_SECRET_KEY in .env}
+      OPENAI_API_BASE_URLS: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      OPENAI_API_KEYS: ${DEEPSEEK_API_KEY:?Set DEEPSEEK_API_KEY in .env}
+      ENABLE_OPENAI_API: "false"
+      ENABLE_OLLAMA_API: "false"
+      ENABLE_EVALUATION_ARENA_MODELS: "false"
+      ENABLE_TITLE_GENERATION: "false"
+      ENABLE_TAGS_GENERATION: "false"
+      ENABLE_FOLLOW_UP_GENERATION: "false"
+      ENABLE_AUTOCOMPLETE_GENERATION: "false"
+      BYPASS_MODEL_ACCESS_CONTROL: "true"
+      DEFAULT_MODELS: company_intelligent_pipe
+      COMPANY_INTELLIGENT_ORCHESTRATOR_URL: ${COMPANY_INTELLIGENT_ORCHESTRATOR_URL:-http://orchestrator-api:8000}
+      OPENWEBUI_SHARED_SECRET: ${OPENWEBUI_SHARED_SECRET:?Set OPENWEBUI_SHARED_SECRET in .env}
+    ports:
+      - "${OPENWEBUI_PORT:-8002}:8080"
+    volumes:
+      - project3-openwebui-data:/app/backend/data
+    networks:
+      - project3-network
+
+  openwebui-bootstrap:
+    image: ghcr.io/open-webui/open-webui:main
+    profiles: ["openwebui"]
+    command: ["python", "/bootstrap/bootstrap_openwebui.py"]
+    environment:
+      DATA_DIR: /app/backend/data
+      WEBUI_SECRET_KEY: ${OPENWEBUI_WEBUI_SECRET_KEY:?Set OPENWEBUI_WEBUI_SECRET_KEY in .env}
+      MODEL_NAME: ${MODEL_NAME:-deepseek-v4-pro}
+      OPENWEBUI_DEMO_MODEL_DISPLAY_NAME: ${OPENWEBUI_DEMO_MODEL_DISPLAY_NAME:-DeepSeek V4 Pro}
+      OPENWEBUI_DEMO_ADMIN_EMAIL: ${OPENWEBUI_DEMO_ADMIN_EMAIL:-admin@demo.com}
+      OPENWEBUI_DEMO_ADMIN_PASSWORD: ${OPENWEBUI_DEMO_ADMIN_PASSWORD:-admin}
+      OPENWEBUI_DEMO_ADMIN_NAME: ${OPENWEBUI_DEMO_ADMIN_NAME:-Project 3.0 Demo Admin}
+      OPENWEBUI_DEMO_USER_EMAIL: ${OPENWEBUI_DEMO_USER_EMAIL:-user@demo.com}
+      OPENWEBUI_DEMO_USER_PASSWORD: user
+      OPENWEBUI_DEMO_USER_NAME: ${OPENWEBUI_DEMO_USER_NAME:-Project 3.0 Demo User}
+      COMPANY_INTELLIGENT_ORCHESTRATOR_URL: ${COMPANY_INTELLIGENT_ORCHESTRATOR_URL:-http://orchestrator-api:8000}
+      OPENWEBUI_SHARED_SECRET: ${OPENWEBUI_SHARED_SECRET:?Set OPENWEBUI_SHARED_SECRET in .env}
+      OPENWEBUI_BOOTSTRAP_TOOL_SOURCE: /tool_source/company_intelligent.py
+      OPENWEBUI_BOOTSTRAP_PIPE_SOURCE: /function_source/company_intelligent_pipe.py
+      OPENWEBUI_DEFAULT_PIPE_DISPLAY_NAME: ${OPENWEBUI_DEFAULT_PIPE_DISPLAY_NAME:-Company Intelligent}
+    volumes:
+      - project3-openwebui-data:/app/backend/data
+      - ./openwebui_bootstrap:/bootstrap:ro
+      - ./openwebui_tools:/tool_source:ro
+      - ./openwebui_functions:/function_source:ro
+    depends_on:
+      openwebui:
+        condition: service_started
+    networks:
+      - project3-network
+
+  active-dataset-watchdog:
+    build:
+      context: ./orchestrator-api
+    profiles: ["watchdog"]
+    command: ["python", "-m", "app.scripts.watch_active_dataset"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-project3}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-project3}
+      CONTAINER_ACTIVE_DATASET_ROOT: ${CONTAINER_ACTIVE_DATASET_ROOT:-/app/active_dataset}
+    volumes:
+      - type: bind
+        source: ${HOST_SHARE_DRIVE_PATH:-./demo_share_drive}
+        target: ${CONTAINER_ACTIVE_DATASET_ROOT:-/app/active_dataset}
+        read_only: true
+    depends_on:
+      orchestrator-api:
+        condition: service_healthy
+    networks:
+      - project3-network
+
+volumes:
+  project3-postgres-data:
+  project3-runtime:
+  project3-openwebui-data:
+
+networks:
+  project3-network:

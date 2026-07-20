@@ -1,0 +1,30 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Pytest/cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local environment/secrets
+.env
+.env.*
+!.env.example
+
+# OS/editor local files
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+
+# draw.io generated / design files are not part of baseline commit
+*.drawio
+*.drawio.bkp
+.$*.drawio.bkp

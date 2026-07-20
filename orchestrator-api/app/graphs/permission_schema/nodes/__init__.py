@@ -1,0 +1,1 @@
+"""Permission schema node implementations."""
