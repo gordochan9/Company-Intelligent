@@ -28,3 +28,6 @@ Thumbs.db
 *.drawio
 *.drawio.bkp
 .$*.drawio.bkp
+
+# Local seed export scratch files
+docker/demo-seed/
