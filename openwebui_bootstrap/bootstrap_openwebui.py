@@ -132,7 +132,7 @@ def validate_pipe_schema(conn: sqlite3.Connection) -> None:
         },
         "openwebui_pipe_bootstrap_schema_unknown",
     )
-    require_columns(conn, "config", {"id", "data", "updated_at"}, "openwebui_pipe_bootstrap_schema_unknown")
+    require_columns(conn, "config", {"id", "data"}, "openwebui_pipe_bootstrap_schema_unknown")
     require_columns(
         conn,
         "model",
@@ -175,7 +175,10 @@ def upsert_config_values(conn: sqlite3.Connection, values: dict[str, object]) ->
             data = {}
         for path, value in values.items():
             set_config_path(data, path, value)
-        conn.execute("UPDATE config SET data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (json.dumps(data), row[0]))
+        if "updated_at" in columns:
+            conn.execute("UPDATE config SET data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (json.dumps(data), row[0]))
+        else:
+            conn.execute("UPDATE config SET data = ? WHERE id = ?", (json.dumps(data), row[0]))
         return
 
     data = {"version": 0, "ui": {}}

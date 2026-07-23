@@ -81,6 +81,17 @@ def create_config_table(conn):
     )
 
 
+def create_config_table_without_updated_at(conn):
+    conn.execute(
+        """
+        CREATE TABLE config (
+            id INTEGER PRIMARY KEY,
+            data TEXT
+        )
+        """
+    )
+
+
 def create_visibility_tables(conn):
     conn.execute(MODEL_SCHEMA)
     conn.execute(ACCESS_GRANT_SCHEMA)
@@ -90,6 +101,15 @@ def test_validate_pipe_schema_accepts_live_verified_shape():
     conn = sqlite3.connect(":memory:")
     conn.execute(FUNCTION_SCHEMA)
     create_config_table(conn)
+    create_visibility_tables(conn)
+
+    bootstrap.validate_pipe_schema(conn)
+
+
+def test_validate_pipe_schema_accepts_config_without_updated_at():
+    conn = sqlite3.connect(":memory:")
+    conn.execute(FUNCTION_SCHEMA)
+    create_config_table_without_updated_at(conn)
     create_visibility_tables(conn)
 
     bootstrap.validate_pipe_schema(conn)
@@ -296,6 +316,17 @@ def test_set_default_model_creates_config_row_when_missing():
     assert data["task"]["tags"]["enable"] is False
     assert data["task"]["follow_up"]["enable"] is False
     assert data["task"]["autocomplete"]["enable"] is False
+
+
+def test_set_default_model_updates_config_without_updated_at():
+    conn = sqlite3.connect(":memory:")
+    create_config_table_without_updated_at(conn)
+    conn.execute("INSERT INTO config (id, data) VALUES (1, ?)", (json.dumps({"ui": {}}),))
+
+    bootstrap.set_default_model(conn, "company_intelligent_pipe")
+
+    data = json.loads(conn.execute("SELECT data FROM config WHERE id = 1").fetchone()[0])
+    assert data["ui"]["default_models"] == "company_intelligent_pipe"
 
 
 def test_demo_user_password_default_is_user():
