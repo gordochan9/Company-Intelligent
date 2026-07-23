@@ -13,6 +13,8 @@ from pydantic import BaseModel, Field
 SAFE_TRANSPORT_ERROR = (
     "I couldn't reach the company backend for this request. Please try again later."
 )
+MAX_HISTORY_MESSAGES = 12
+MAX_HISTORY_CONTENT_CHARS = 2000
 
 
 class Pipe:
@@ -42,8 +44,9 @@ class Pipe:
             return SAFE_TRANSPORT_ERROR
 
         identity = self._extract_identity(__user__)
+        messages = self._extract_messages(body)
         try:
-            return await asyncio.to_thread(self._ask_backend, question, identity)
+            return await asyncio.to_thread(self._ask_backend, question, identity, messages)
         except (
             OSError,
             urllib.error.URLError,
@@ -74,6 +77,34 @@ class Pipe:
                 return content
         return ""
 
+    def _extract_messages(self, body: dict[str, Any]) -> list[dict[str, str]]:
+        messages = body.get("messages", [])
+        if not isinstance(messages, list):
+            return []
+
+        history: list[dict[str, str]] = []
+        for message in messages[-MAX_HISTORY_MESSAGES:]:
+            if not isinstance(message, dict):
+                continue
+            role = message.get("role")
+            if role not in {"user", "assistant"}:
+                continue
+            content = self._message_text(message.get("content"))
+            if content:
+                history.append({"role": role, "content": content[:MAX_HISTORY_CONTENT_CHARS]})
+        return history
+
+    def _message_text(self, content: Any) -> str:
+        if isinstance(content, str):
+            return content.strip()
+        if not isinstance(content, list):
+            return ""
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict) and isinstance(item.get("text"), str):
+                parts.append(item["text"])
+        return "\n".join(parts).strip()
+
     def _extract_identity(self, user: dict[str, Any] | None) -> dict[str, str]:
         if not isinstance(user, dict):
             return {}
@@ -90,10 +121,10 @@ class Pipe:
 
         return identity
 
-    def _ask_backend(self, question: str, identity: dict[str, str]) -> str:
+    def _ask_backend(self, question: str, identity: dict[str, str], messages: list[dict[str, str]]) -> str:
         base_url = self.valves.orchestrator_api_base_url.rstrip("/")
         url = f"{base_url}/openwebui/ask"
-        payload = json.dumps({"question": question}).encode("utf-8")
+        payload = json.dumps({"question": question, "messages": messages}).encode("utf-8")
         headers = {
             "Content-Type": "application/json",
             "X-Company-Tool-Token": self.valves.openwebui_shared_secret,

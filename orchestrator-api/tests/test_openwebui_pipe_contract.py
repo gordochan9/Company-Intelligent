@@ -53,7 +53,10 @@ def test_pipe_posts_metadata_user_prompt_to_openwebui_ask(monkeypatch):
     assert result == "answer from backend"
     assert captured["url"] == "http://backend.local/openwebui/ask"
     assert captured["timeout"] == 7
-    assert captured["body"] == {"question": "real prompt"}
+    assert captured["body"] == {
+        "question": "real prompt",
+        "messages": [{"role": "user", "content": "wrapped prompt"}],
+    }
 
 
 def test_pipe_default_timeout_is_600_seconds(monkeypatch):
@@ -93,7 +96,14 @@ def test_pipe_falls_back_to_latest_user_message(monkeypatch):
     )
 
     assert result == "latest answer"
-    assert captured["body"] == {"question": "latest"}
+    assert captured["body"] == {
+        "question": "latest",
+        "messages": [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "middle"},
+            {"role": "user", "content": "latest"},
+        ],
+    }
 
 
 def test_pipe_sends_existing_identity_headers(monkeypatch):

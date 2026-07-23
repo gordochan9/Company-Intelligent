@@ -9,5 +9,6 @@ def build_tool_selection_prompt(state: ToolSelectionPlannerState) -> ToolSelecti
         "tool_selection_prompt": build_prompt(
             str(state.get("user_question") or ""),
             list(state.get("available_tool_cards", [])),
+            list(state.get("messages") or []),
         )
     }

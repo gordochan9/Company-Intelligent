@@ -68,6 +68,7 @@ services:
       ENABLE_FOLLOW_UP_GENERATION: "false"
       ENABLE_AUTOCOMPLETE_GENERATION: "false"
       BYPASS_MODEL_ACCESS_CONTROL: "true"
+      DEFAULT_LOCALE: ${OPENWEBUI_DEFAULT_LOCALE:-en-US}
       DEFAULT_MODELS: company_intelligent_pipe
       COMPANY_INTELLIGENT_ORCHESTRATOR_URL: ${COMPANY_INTELLIGENT_ORCHESTRATOR_URL:-http://orchestrator-api:8000}
       OPENWEBUI_SHARED_SECRET: ${OPENWEBUI_SHARED_SECRET:?Set OPENWEBUI_SHARED_SECRET in .env}
@@ -98,6 +99,7 @@ services:
       OPENWEBUI_BOOTSTRAP_TOOL_SOURCE: /tool_source/company_intelligent.py
       OPENWEBUI_BOOTSTRAP_PIPE_SOURCE: /function_source/company_intelligent_pipe.py
       OPENWEBUI_DEFAULT_PIPE_DISPLAY_NAME: ${OPENWEBUI_DEFAULT_PIPE_DISPLAY_NAME:-Company Intelligent}
+      OPENWEBUI_DEFAULT_LOCALE: ${OPENWEBUI_DEFAULT_LOCALE:-en-US}
     volumes:
       - project3-openwebui-data:/app/backend/data
       - ./openwebui_bootstrap:/bootstrap:ro

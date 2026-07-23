@@ -22,6 +22,7 @@ Your only job is to select which available tool workflow should handle the user 
 You must use only the provided tool capability cards.
 
 Read the user question.
+Read conversation_history to resolve follow-up references in the user question.
 Read all available tool capability cards.
 Select the available tool workflow or workflows that should handle the request.
 
@@ -105,6 +106,8 @@ FORBIDDEN_OUTPUT_FIELDS = {"_".join(parts) for parts in FORBIDDEN_OUTPUT_FIELD_P
 
 _ToolSelectionModel = Callable[[str, dict[str, Any]], dict[str, Any] | str]
 _tool_selection_model: _ToolSelectionModel | None = None
+MAX_CONVERSATION_MESSAGES = 12
+MAX_CONVERSATION_CONTENT_CHARS = 2000
 
 
 class ToolSelectionModelUnavailable(RuntimeError):
@@ -135,14 +138,45 @@ def normalize_tool_cards(cards: list[dict[str, Any]] | None) -> list[dict[str, A
     return normalized
 
 
-def build_tool_selection_prompt(user_question: str, tool_capability_cards: list[dict[str, Any]]) -> dict[str, Any]:
+def build_tool_selection_prompt(
+    user_question: str,
+    tool_capability_cards: list[dict[str, Any]],
+    messages: list[Any] | None = None,
+) -> dict[str, Any]:
     return {
         "system_prompt": STATIC_TOOL_SELECTION_PROMPT,
         "payload": {
             "user_question": user_question,
+            "conversation_history": conversation_history_from_messages(messages),
             "tool_capability_cards": tool_capability_cards,
         },
     }
+
+
+def conversation_history_from_messages(messages: list[Any] | None) -> list[dict[str, str]]:
+    history: list[dict[str, str]] = []
+    for message in list(messages or [])[-MAX_CONVERSATION_MESSAGES:]:
+        if not isinstance(message, dict):
+            continue
+        role = message.get("role")
+        if role not in {"user", "assistant"}:
+            continue
+        content = _message_text(message.get("content"))
+        if content:
+            history.append({"role": role, "content": content[:MAX_CONVERSATION_CONTENT_CHARS]})
+    return history
+
+
+def _message_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for item in content:
+        if isinstance(item, dict) and isinstance(item.get("text"), str):
+            parts.append(item["text"])
+    return "\n".join(parts).strip()
 
 
 def select_tool_workflow(prompt: dict[str, Any]) -> dict[str, Any] | str:

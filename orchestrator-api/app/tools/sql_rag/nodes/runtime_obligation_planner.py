@@ -10,11 +10,15 @@ from app.tools.sql_rag.state import STATUS_PLANNED, SqlRagState, fail_state
 
 _RuntimePlanModel = Callable[[dict[str, Any]], dict[str, Any] | str]
 _runtime_obligation_planner_model: _RuntimePlanModel | None = None
+MAX_CONVERSATION_MESSAGES = 12
+MAX_CONVERSATION_CONTENT_CHARS = 2000
 _RUNTIME_PLAN_SYSTEM_PROMPT = """Return JSON only.
 Plan the internal SQL/RAG workflow after backend identity and permission enforcement.
+Read conversation_history to resolve follow-up references in the user question before extracting answer obligations.
 Return exactly this top-level shape:
 {"status":"planned","obligations":[{"obligation_id":"o1","description":"..."}],"steps":[{"step_id":"step_1","step_type":"sql|rag|final_result","goal":"...","obligation_ids":["o1"],"depends_on":[],"reason":"..."}],"reason":""}
 Return status planned only when obligations contains at least one item.
+For any question with explicit answer obligations, return planned and delegate data or evidence sufficiency to the child steps. Missing schema or unseen data at this planning stage is not a reason to return another status.
 Extract every explicit answer obligation and assign each obligation_id to exactly one executable sql or rag step.
 Every obligation description must be self-contained.
 One executable step may cover multiple compatible obligations, but separate count and list requirements must remain separate steps.
@@ -22,6 +26,8 @@ Choose sql or rag semantically. Do not use or request keyword routing.
 Use sql for exact counts, totals, rankings, filters, arithmetic, and structured data.
 Use rag for document, policy, citation, and narrative evidence.
 Each executable step goal must preserve the subject, filters, time scope, comparison or ranking requirement, and requested outputs needed for that step.
+Do not introduce an arithmetic operator or formula that the user did not state. Preserve a semantic result request such as a net or combined result without inventing subtraction or addition for the child step.
+When later wording refers back to a metric already introduced in the same question, preserve that metric's definition. Do not invent a parallel calculation variant unless the question explicitly contrasts the variants.
 Each step must be executable using only its assigned obligation descriptions, complete validated outputs from declared dependencies, and trusted permission context.
 Do not predict child output names or select named dependency inputs.
 Add exactly one final_result step that depends directly on every executable step and has no obligation_ids.
@@ -118,7 +124,34 @@ def _runtime_plan_payload(state: SqlRagState) -> dict[str, Any]:
         "system_prompt": _RUNTIME_PLAN_SYSTEM_PROMPT,
         "payload": {
             "user_question": state.get("user_question"),
+            "conversation_history": _conversation_history_from_messages(state.get("messages")),
             "tool_selection_reason": selection.get("reason") or "",
             "selected_sql_rag_reason": selected_sql_rag[0].get("reason") if selected_sql_rag else "",
         },
     }
+
+
+def _conversation_history_from_messages(messages: list[Any] | None) -> list[dict[str, str]]:
+    history: list[dict[str, str]] = []
+    for message in list(messages or [])[-MAX_CONVERSATION_MESSAGES:]:
+        if not isinstance(message, dict):
+            continue
+        role = message.get("role")
+        if role not in {"user", "assistant"}:
+            continue
+        content = _message_text(message.get("content"))
+        if content:
+            history.append({"role": role, "content": content[:MAX_CONVERSATION_CONTENT_CHARS]})
+    return history
+
+
+def _message_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for item in content:
+        if isinstance(item, dict) and isinstance(item.get("text"), str):
+            parts.append(item["text"])
+    return "\n".join(parts).strip()

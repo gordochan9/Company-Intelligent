@@ -28,6 +28,7 @@ def openwebui_ask(
     result = run_main_graph(
         {
             "user_question": payload.question,
+            "messages": list(payload.messages or []),
             "openwebui_user_identity": identity,
             "openwebui_request_metadata": {"source": "company_intelligent"},
         }

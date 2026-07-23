@@ -9,6 +9,7 @@ class OpenWebUIAskRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     question: str = Field(min_length=1, max_length=8000)
+    messages: list[dict[str, Any]] = Field(default_factory=list, max_length=40)
 
 
 class OpenWebUIAskResponse(BaseModel):

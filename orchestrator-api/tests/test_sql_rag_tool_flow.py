@@ -398,14 +398,30 @@ def test_runtime_obligation_planner_model_receives_bounded_prompt(monkeypatch: p
         lambda _state: _sql_result("step_1", [{"amount": 100}], ["amount"]),
     )
 
-    run_sql_rag_agent(_state())
+    state = {
+        **_state(),
+        "user_question": "What are their names?",
+        "messages": [
+            {"role": "user", "content": "For order 10250, how many products are there?"},
+            {"role": "assistant", "content": "There are 3 products in order 10250."},
+            {"role": "user", "content": "What are their names?"},
+        ],
+    }
 
-    assert captured["payload"]["user_question"] == "What invoices are overdue?"
+    run_sql_rag_agent(state)
+
+    assert captured["payload"]["user_question"] == "What are their names?"
+    assert captured["payload"]["conversation_history"] == state["messages"]
     assert "obligation_id" in captured["system_prompt"]
     assert "expected_outputs" not in captured["system_prompt"]
     assert "required_inputs" not in captured["system_prompt"]
     assert "raw SQL" in captured["system_prompt"]
     assert "planned only when obligations contains at least one item" in captured["system_prompt"]
+    assert "delegate data or evidence sufficiency to the child steps" in captured["system_prompt"]
+    assert "preserve that metric's definition" in captured["system_prompt"]
+    assert "Do not invent a parallel calculation variant" in captured["system_prompt"]
+    assert "Do not introduce an arithmetic operator or formula that the user did not state" in captured["system_prompt"]
+    assert "resolve follow-up references" in captured["system_prompt"]
     assert "conversation_context" not in captured["payload"]
     assert "limitations" not in captured["system_prompt"]
 

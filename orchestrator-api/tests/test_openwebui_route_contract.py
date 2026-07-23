@@ -15,7 +15,7 @@ def _headers(token: str = "shared") -> dict[str, str]:
     }
 
 
-def test_openwebui_ask_calls_main_graph_with_question_and_identity(monkeypatch, monkeypatch_context=None) -> None:
+def test_openwebui_ask_calls_main_graph_with_question_identity_and_messages(monkeypatch, monkeypatch_context=None) -> None:
     captured: dict = {}
     monkeypatch.setenv("OPENWEBUI_SHARED_SECRET", "shared")
 
@@ -31,10 +31,16 @@ def test_openwebui_ask_calls_main_graph_with_question_and_identity(monkeypatch, 
 
     monkeypatch.setattr("app.routes.openwebui.run_main_graph", graph)
 
-    response = TestClient(app).post("/openwebui/ask", json={"question": "Question?"}, headers=_headers())
+    messages = [
+        {"role": "user", "content": "Previous question"},
+        {"role": "assistant", "content": "Previous answer"},
+        {"role": "user", "content": "Question?"},
+    ]
+    response = TestClient(app).post("/openwebui/ask", json={"question": "Question?", "messages": messages}, headers=_headers())
 
     assert response.status_code == 200
     assert captured["user_question"] == "Question?"
+    assert captured["messages"] == messages
     assert captured["openwebui_user_identity"]["email"] == "admin@demo.com"
     assert captured["openwebui_user_identity"]["role_hint"] == "admin"
     assert response.json() == {

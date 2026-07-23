@@ -35,6 +35,7 @@ DEMO_USER_EMAIL = env_value("OPENWEBUI_DEMO_USER_EMAIL", "user@demo.com")
 DEMO_USER_PASSWORD = "user"
 DEMO_USER_NAME = env_value("OPENWEBUI_DEMO_USER_NAME", "Project 3.0 Demo User")
 PIPE_DISPLAY_NAME = env_value("OPENWEBUI_DEFAULT_PIPE_DISPLAY_NAME", "Company Intelligent")
+DEFAULT_LOCALE = env_value("OPENWEBUI_DEFAULT_LOCALE", "en-US")
 
 
 class OpenWebUIBootstrapError(RuntimeError):
@@ -348,6 +349,8 @@ def set_default_model(conn: sqlite3.Connection, model_id: str) -> None:
             "ui.default_models": model_id,
             "ui.default_pinned_models": model_id,
             "ui.model_order_list": [model_id],
+            "ui.locale": DEFAULT_LOCALE,
+            "ui.language": DEFAULT_LOCALE,
             "openai.enable": False,
             "ollama.enable": False,
             "evaluation.arena.enable": False,

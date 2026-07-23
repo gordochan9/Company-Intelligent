@@ -50,14 +50,21 @@ def test_company_intelligent_posts_question_identity_headers_and_returns_final_a
     tools.valves.orchestrator_api_base_url = "http://backend.local"
     tools.valves.openwebui_shared_secret = "shared"
 
+    messages = [
+        {"role": "user", "content": "Previous question"},
+        {"role": "assistant", "content": "Previous answer"},
+        {"role": "user", "content": "Question?"},
+    ]
+
     result = tools.company_intelligent(
         "Question?",
         __user__={"id": "user-1", "email": "admin@demo.com", "name": "Alice", "role": "admin"},
+        __messages__=messages,
     )
 
     assert result == "Backend answer."
     assert captured["url"] == "http://backend.local/openwebui/ask"
-    assert captured["body"] == {"question": "Question?"}
+    assert captured["body"] == {"question": "Question?", "messages": messages}
     assert captured["headers"]["X-company-tool-token"] == "shared"
     assert captured["headers"]["X-openwebui-user-email"] == "admin@demo.com"
     assert captured["timeout"] == 600.0

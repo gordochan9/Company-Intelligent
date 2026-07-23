@@ -58,6 +58,26 @@ def test_company_questions_select_sql_rag_without_over_clarification(question: s
     ]
 
 
+def test_tool_selection_model_receives_conversation_history_for_followup() -> None:
+    captured: dict = {}
+
+    def model(_prompt: str, payload: dict) -> dict:
+        captured.update(payload)
+        return _select_sql_rag_model(_prompt, payload)
+
+    set_tool_selection_model(model)
+    state = _state("What are their names?")
+    state["messages"] = [
+        {"role": "user", "content": "For order 10250, how many products are there?"},
+        {"role": "assistant", "content": "There are 3 products in order 10250."},
+        {"role": "user", "content": "What are their names?"},
+    ]
+
+    invoke_tool_selection_planner_subgraph(state)
+
+    assert captured["conversation_history"] == state["messages"]
+
+
 def test_ambiguous_question_can_return_clarification() -> None:
     set_tool_selection_model(
         lambda _prompt, _payload: {

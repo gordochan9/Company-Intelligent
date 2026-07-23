@@ -270,6 +270,8 @@ def test_set_default_model_uses_verified_model_id_when_config_row_exists():
     assert data["ui"]["default_models"] == "company_intelligent_pipe"
     assert data["ui"]["default_pinned_models"] == "company_intelligent_pipe"
     assert data["ui"]["model_order_list"] == ["company_intelligent_pipe"]
+    assert data["ui"]["locale"] == "en-US"
+    assert data["ui"]["language"] == "en-US"
     assert data["openai"]["enable"] is False
     assert data["ollama"]["enable"] is False
     assert data["evaluation"]["arena"]["enable"] is False
@@ -289,6 +291,7 @@ def test_set_default_model_creates_config_row_when_missing():
 
     data = json.loads(conn.execute("SELECT data FROM config").fetchone()[0])
     assert data["ui"]["default_models"] == "company_intelligent_pipe"
+    assert data["ui"]["locale"] == "en-US"
     assert data["task"]["title"]["enable"] is False
     assert data["task"]["tags"]["enable"] is False
     assert data["task"]["follow_up"]["enable"] is False

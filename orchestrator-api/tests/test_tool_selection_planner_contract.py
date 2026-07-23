@@ -8,11 +8,26 @@ from app.services.tool_selection_planner import (
 )
 
 
-def test_prompt_uses_only_user_question_and_tool_cards_as_payload() -> None:
-    prompt = build_tool_selection_prompt("How many invoices are overdue?", [{"tool": "sql_rag"}])
+def test_prompt_uses_bounded_conversation_history_and_tool_cards_as_payload() -> None:
+    prompt = build_tool_selection_prompt(
+        "What are their names?",
+        [{"tool": "sql_rag"}],
+        [
+            {"role": "system", "content": "ignored"},
+            {"role": "user", "content": "For order 10250, how many products are there?"},
+            {"role": "assistant", "content": "There are 3 products in order 10250."},
+            {"role": "user", "content": "What are their names?"},
+        ],
+    )
 
     assert set(prompt) == {"system_prompt", "payload"}
-    assert set(prompt["payload"]) == {"user_question", "tool_capability_cards"}
+    assert set(prompt["payload"]) == {"user_question", "conversation_history", "tool_capability_cards"}
+    assert prompt["payload"]["conversation_history"] == [
+        {"role": "user", "content": "For order 10250, how many products are there?"},
+        {"role": "assistant", "content": "There are 3 products in order 10250."},
+        {"role": "user", "content": "What are their names?"},
+    ]
+    assert "Read conversation_history to resolve follow-up references" in prompt["system_prompt"]
     assert "Do not ask for clarification just because execution details are missing." in prompt["system_prompt"]
     assert "Do not return deny." in prompt["system_prompt"]
 
