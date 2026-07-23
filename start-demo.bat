@@ -1,2 +1,2 @@
 @echo off
-call "%~dp0Start Project 3.0 Demo.bat" %*
+call "%~dp0start-project-3.0-demo.bat" %*

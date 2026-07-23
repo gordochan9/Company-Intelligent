@@ -93,7 +93,7 @@ demo_share_drive/
 1. **Replace the files** inside each subfolder with your own company data (PDF, DOCX, XLSX, CSV). Keep the subfolder structure intact.
 2. **Rebuild the dataset:**
    ```bash
-   .\Rebuild Dataset.bat
+   .\rebuild-dataset.bat
    ```
    The system will automatically parse your files, extract structured data, build the source catalog, infer approved join relationships, and populate the database. No code changes required.
 3. **Restart the system:**
@@ -248,7 +248,7 @@ Two accounts are pre-created automatically during first-time setup:
 ### To Stop
 
 ```bash
-.\Stop Project 3.0 Demo.bat
+.\stop-project-3.0-demo.bat
 ```
 
 ---

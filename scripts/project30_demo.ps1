@@ -170,7 +170,7 @@ function Start-Demo {
   Set-Location $RepoRoot
   $created = Write-DotEnvIfMissing
   if ($created) {
-    Write-Step ".env" "created" "Fill DEEPSEEK_API_KEY, then run Start Project 3.0 Demo.bat again."
+    Write-Step ".env" "created" "Fill DEEPSEEK_API_KEY, then run start-demo.bat again."
     Set-DemoExitCode 2
     return
   }
