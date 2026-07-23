@@ -104,6 +104,28 @@ WATCHDOG_ENABLED=true
   return $true
 }
 
+function Update-LocalSecretsIfPlaceholder {
+  if (-not (Test-Path $EnvPath)) { return $false }
+  $content = Get-Content $EnvPath -Raw
+  $changed = $false
+  foreach ($item in @(
+    @("POSTGRES_PASSWORD", "change_me_local_only"),
+    @("OPENWEBUI_WEBUI_SECRET_KEY", "replace_with_random_local_webui_secret"),
+    @("OPENWEBUI_SHARED_SECRET", "replace_with_random_local_tool_secret")
+  )) {
+    $name = $item[0]
+    $placeholder = $item[1]
+    if ($content -match "(?m)^$name=$([Regex]::Escape($placeholder))$") {
+      $content = $content -replace "(?m)^$name=$([Regex]::Escape($placeholder))$", "$name=$(New-LocalSecret)"
+      $changed = $true
+    }
+  }
+  if ($changed) {
+    Set-Content -Path $EnvPath -Value $content -Encoding ascii -NoNewline
+  }
+  return $changed
+}
+
 function Get-ConfigValue($Config, $Name, $Default = "") {
   $processValue = [Environment]::GetEnvironmentVariable($Name)
   if ($processValue) { return $processValue }
@@ -151,6 +173,9 @@ function Start-Demo {
     Write-Step ".env" "created" "Fill DEEPSEEK_API_KEY, then run Start Project 3.0 Demo.bat again."
     Set-DemoExitCode 2
     return
+  }
+  if (Update-LocalSecretsIfPlaceholder) {
+    Write-Step ".env" "updated" "Generated local-only Docker/OpenWebUI secrets."
   }
   $config = Read-DotEnv $EnvPath
   Assert-DockerAvailable
