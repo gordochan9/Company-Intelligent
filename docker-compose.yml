@@ -1,3 +1,5 @@
+name: company-intelligent-v26
+
 services:
   postgres:
     image: pgvector/pgvector:pg16

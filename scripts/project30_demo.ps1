@@ -90,7 +90,7 @@ OPENWEBUI_DEMO_ADMIN_EMAIL=admin@demo.com
 OPENWEBUI_DEMO_ADMIN_PASSWORD=admin
 OPENWEBUI_DEMO_ADMIN_NAME=Project 3.0 Demo Admin
 OPENWEBUI_DEMO_USER_EMAIL=user@demo.com
-OPENWEBUI_DEMO_USER_PASSWORD=Project30User!2026
+OPENWEBUI_DEMO_USER_PASSWORD=user
 OPENWEBUI_DEMO_USER_NAME=Project 3.0 Demo User
 
 PROJECT3_SKIP_BROWSER_OPEN=false
@@ -135,7 +135,46 @@ function Get-ConfigValue($Config, $Name, $Default = "") {
 
 function Assert-DockerAvailable {
   $docker = Get-Command docker -ErrorAction SilentlyContinue
+  if (-not $docker) {
+    $bundledDocker = Join-Path $env:ProgramFiles "Docker\Docker\resources\bin\docker.exe"
+    if (Test-Path $bundledDocker) {
+      $env:Path = (Split-Path $bundledDocker) + ";" + $env:Path
+      $docker = Get-Command docker -ErrorAction SilentlyContinue
+    }
+  }
   if (-not $docker) { throw "docker_command_not_found" }
+}
+
+function Test-DockerReady {
+  $previousErrorAction = $ErrorActionPreference
+  $ErrorActionPreference = "SilentlyContinue"
+  try {
+    & docker info --format "{{.ServerVersion}}" *> $null
+    return $LASTEXITCODE -eq 0
+  } finally {
+    $ErrorActionPreference = $previousErrorAction
+  }
+}
+
+function Wait-DockerReady($Seconds = 180) {
+  Assert-DockerAvailable
+  if (Test-DockerReady) { return }
+
+  $desktopPaths = @(
+    (Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"),
+    (Join-Path $env:LOCALAPPDATA "Docker\Docker Desktop.exe")
+  ) | Where-Object { Test-Path $_ }
+  if ($desktopPaths.Count -gt 0) {
+    Write-Step "Docker Desktop" "starting"
+    Start-Process -FilePath $desktopPaths[0]
+  }
+
+  $deadline = (Get-Date).AddSeconds($Seconds)
+  while ((Get-Date) -lt $deadline) {
+    Start-Sleep -Seconds 3
+    if (Test-DockerReady) { return }
+  }
+  throw "docker_daemon_not_ready: Start Docker Desktop, complete its first-run setup, then run start-demo.bat again."
 }
 
 function Assert-ComposeConfigValid {
@@ -166,7 +205,72 @@ function Wait-HttpOk($Url, $Seconds = 60) {
   throw "http_wait_failed"
 }
 
+function Reset-StaleComposeState {
+  $previousErrorAction = $ErrorActionPreference
+  $ErrorActionPreference = "SilentlyContinue"
+  try {
+    & docker compose --profile openwebui --profile watchdog down --remove-orphans *> $null
+    & docker compose --profile openwebui --profile watchdog rm --stop --force *> $null
+  } finally {
+    $ErrorActionPreference = $previousErrorAction
+  }
+}
+
+function Wait-ComposeServiceExitZero($Service, $Seconds = 180) {
+  $deadline = (Get-Date).AddSeconds($Seconds)
+  while ((Get-Date) -lt $deadline) {
+    $containerId = [string](& docker compose ps -a -q $Service)
+    $containerId = $containerId.Trim()
+    if ($containerId) {
+      $state = [string](& docker inspect --format '{{.State.Status}}|{{.State.ExitCode}}' $containerId)
+      if ($LASTEXITCODE -eq 0) {
+        $parts = $state.Trim().Split("|", 2)
+        if ($parts[0] -eq "exited") {
+          if ($parts[1] -eq "0") { return }
+          throw "$Service`_failed"
+        }
+      }
+    }
+    Start-Sleep -Seconds 2
+  }
+  throw "$Service`_wait_failed"
+}
+
+function Get-OpenWebUiToken($BaseUrl, $Email, $Password) {
+  $body = @{ email = $Email; password = $Password } | ConvertTo-Json
+  $response = Invoke-RestMethod -Uri ($BaseUrl.TrimEnd("/") + "/api/v1/auths/signin") -Method Post -ContentType "application/json" -Body $body -TimeoutSec 10
+  if (-not $response.token) { throw "openwebui_signin_failed" }
+  return [string]$response.token
+}
+
+function Assert-OpenWebUiModelVisibility($Config, $BaseUrl) {
+  foreach ($account in @(
+    @((Get-ConfigValue $Config "OPENWEBUI_DEMO_ADMIN_EMAIL" "admin@demo.com"), (Get-ConfigValue $Config "OPENWEBUI_DEMO_ADMIN_PASSWORD" "admin")),
+    @((Get-ConfigValue $Config "OPENWEBUI_DEMO_USER_EMAIL" "user@demo.com"), "user")
+  )) {
+    $token = Get-OpenWebUiToken $BaseUrl $account[0] $account[1]
+    $response = Invoke-RestMethod -Uri ($BaseUrl.TrimEnd("/") + "/api/models?refresh=true") -Headers @{ Authorization = "Bearer $token" } -Method Get -TimeoutSec 15
+    $modelIds = @($response.data | ForEach-Object { $_.id })
+    if ($modelIds.Count -ne 1 -or $modelIds[0] -ne "company_intelligent_pipe") {
+      throw "openwebui_model_visibility_failed"
+    }
+  }
+}
+
+function Invoke-DemoSmoke($Config, $OpenWebUiEnabled) {
+  $healthBaseUrl = Get-ConfigValue $Config "ORCHESTRATOR_API_BASE_URL" "http://127.0.0.1:8003"
+  Wait-HttpOk ($healthBaseUrl.TrimEnd("/") + "/health")
+  if ($OpenWebUiEnabled) {
+    $openWebUiBaseUrl = Get-ConfigValue $Config "OPENWEBUI_BASE_URL" "http://127.0.0.1:8002"
+    Wait-HttpOk $openWebUiBaseUrl 180
+    Wait-ComposeServiceExitZero "openwebui-bootstrap"
+    Assert-OpenWebUiModelVisibility $Config $openWebUiBaseUrl
+  }
+  Write-Step "Project 3.0 smoke" "ok"
+}
+
 function Write-DockerDiagnostics {
+  & docker compose ps -a
   foreach ($service in @("openwebui", "openwebui-bootstrap", "orchestrator-api", "postgres")) {
     Write-Step "docker logs" "info" $service
     & docker compose logs --tail 120 $service
@@ -185,9 +289,10 @@ function Start-Demo {
     Write-Step ".env" "updated" "Generated local-only Docker/OpenWebUI secrets."
   }
   $config = Read-DotEnv $EnvPath
-  Assert-DockerAvailable
+  Wait-DockerReady
   Assert-RequiredEnvConfigured $config
   Assert-ComposeConfigValid
+  Reset-StaleComposeState
   $openWebUiEnabled = (Get-ConfigValue $config "OPENWEBUI_ENABLED" "false") -eq "true"
   $watchdogEnabled = (Get-ConfigValue $config "WATCHDOG_ENABLED" "true") -eq "true" -and (Get-ConfigValue $config "PROJECT3_SKIP_WATCHDOG_START" "false") -ne "true"
   if ($openWebUiEnabled) {
@@ -205,16 +310,12 @@ function Start-Demo {
     Write-DockerDiagnostics
     throw "docker_compose_up_failed"
   }
-  $healthBaseUrl = Get-ConfigValue $config "ORCHESTRATOR_API_BASE_URL" "http://127.0.0.1:8003"
-  Wait-HttpOk ($healthBaseUrl.TrimEnd("/") + "/health")
-  if ($openWebUiEnabled) {
-    Wait-HttpOk (Get-ConfigValue $config "OPENWEBUI_BASE_URL" "http://127.0.0.1:8002") 180
-  }
   if ((Get-ConfigValue $config "PROJECT3_SKIP_STARTUP_SMOKE" "false") -ne "true") {
-    & python (Join-Path $RepoRoot "scripts/smoke_project30_demo.py")
-    if ($LASTEXITCODE -ne 0) {
+    try {
+      Invoke-DemoSmoke $config $openWebUiEnabled
+    } catch {
       Write-DockerDiagnostics
-      throw "startup_smoke_failed"
+      throw
     }
   }
   if ($openWebUiEnabled -and (Get-ConfigValue $config "PROJECT3_SKIP_BROWSER_OPEN" "false") -ne "true") {
@@ -226,7 +327,7 @@ function Start-Demo {
 
 function Stop-Demo {
   Set-Location $RepoRoot
-  Assert-DockerAvailable
+  Wait-DockerReady
   & docker compose stop
   if ($LASTEXITCODE -ne 0) { throw "docker_compose_stop_failed" }
   Write-Step "Project 3.0 demo" "stopped" "Docker volumes and source files were preserved."
@@ -235,8 +336,13 @@ function Stop-Demo {
 
 function Smoke-Demo {
   Set-Location $RepoRoot
-  & python (Join-Path $RepoRoot "scripts/smoke_project30_demo.py")
-  Set-DemoExitCode $LASTEXITCODE
+  $config = Read-DotEnv $EnvPath
+  Wait-DockerReady
+  Assert-RequiredEnvConfigured $config
+  Assert-ComposeConfigValid
+  $openWebUiEnabled = (Get-ConfigValue $config "OPENWEBUI_ENABLED" "false") -eq "true"
+  Invoke-DemoSmoke $config $openWebUiEnabled
+  Set-DemoExitCode 0
 }
 
 try {
