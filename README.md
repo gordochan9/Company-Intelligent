@@ -98,7 +98,7 @@ demo_share_drive/
    The system will automatically parse your files, extract structured data, build the source catalog, infer approved join relationships, and populate the database. No code changes required.
 3. **Restart the system:**
    ```bash
-   .\Start Project 3.0 Demo.bat
+   .\start-demo.bat
    ```
 
 The permission schema applies to your data automatically based on the folder structure and user access configuration.
@@ -221,7 +221,7 @@ copy .env.example .env
 #                                  e.g. C:\Users\YourName\company-intelligent\demo_share_drive
 
 # 4. Start the system
-.\Start Project 3.0 Demo.bat
+.\start-demo.bat
 ```
 
 On first run, the system will start PostgreSQL, the Orchestrator API, and Open WebUI via Docker Compose, and automatically bootstrap the demo environment.
@@ -242,7 +242,7 @@ Two accounts are pre-created automatically during first-time setup:
 ### Subsequent Runs
 
 ```bash
-.\Start Project 3.0 Demo.bat
+.\start-demo.bat
 ```
 
 ### To Stop
