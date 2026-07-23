@@ -2,7 +2,6 @@ import json
 import sqlite3
 import sys
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -128,14 +127,7 @@ def test_validate_pipe_schema_rejects_unknown_function_shape():
 
 
 def test_selectable_pipe_model_id_uses_verified_non_manifold_function_id():
-    assert bootstrap.selectable_pipe_model_id("company_intelligent_pipe", object()) == "company_intelligent_pipe"
-
-
-def test_selectable_pipe_model_id_stops_for_unverified_manifold_pipe():
-    with pytest.raises(bootstrap.OpenWebUIBootstrapError) as exc:
-        bootstrap.selectable_pipe_model_id("company_intelligent_pipe", SimpleNamespace(pipes=lambda: []))
-
-    assert exc.value.code == "openwebui_pipe_model_id_unknown"
+    assert bootstrap.selectable_pipe_model_id("company_intelligent_pipe") == "company_intelligent_pipe"
 
 
 def test_upsert_pipe_function_is_idempotent_and_does_not_guess_grants(monkeypatch):

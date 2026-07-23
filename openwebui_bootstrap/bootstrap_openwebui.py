@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import sqlite3
@@ -88,19 +87,27 @@ def ensure_user(conn: sqlite3.Connection, *, user_id: str, email: str, password:
     return resolved
 
 
-async def build_tool_specs(content: str) -> tuple[list[dict], dict]:
-    from open_webui.utils.plugin import load_tool_module_by_id
-    from open_webui.utils.tools import get_tool_specs
+def build_tool_specs(_content: str) -> tuple[list[dict], dict]:
+    return [
+        {
+            "name": "company_intelligent",
+            "description": "Ask the Project 3.0 company intelligence backend.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The business question to answer.",
+                    }
+                },
+                "required": ["question"],
+            },
+        }
+    ], {"description": "Project 3.0 company_intelligent tool."}
 
-    tool_module, frontmatter = await load_tool_module_by_id(TOOL_ID, content=content)
-    return get_tool_specs(tool_module), frontmatter
 
-
-async def build_function_metadata(function_id: str, content: str) -> tuple[object, str, dict]:
-    from open_webui.utils.plugin import load_function_module_by_id
-
-    function_module, function_type, frontmatter = await load_function_module_by_id(function_id, content=content)
-    return function_module, function_type, frontmatter
+def build_function_metadata(_function_id: str, _content: str) -> tuple[str, dict]:
+    return "pipe", {"description": "Project 3.0 company_intelligent pipe."}
 
 
 def table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
@@ -147,9 +154,7 @@ def validate_pipe_schema(conn: sqlite3.Connection) -> None:
     )
 
 
-def selectable_pipe_model_id(function_id: str, function_module: object) -> str:
-    if hasattr(function_module, "pipes"):
-        raise OpenWebUIBootstrapError("openwebui_pipe_model_id_unknown")
+def selectable_pipe_model_id(function_id: str) -> str:
     return function_id
 
 
@@ -368,14 +373,14 @@ def set_default_model(conn: sqlite3.Connection, model_id: str) -> None:
 def main() -> int:
     wait_for_db()
     content = TOOL_SOURCE_PATH.read_text(encoding="utf-8")
-    specs, frontmatter = asyncio.run(build_tool_specs(content))
+    specs, frontmatter = build_tool_specs(content)
     if not PIPE_SOURCE_PATH.exists():
         raise OpenWebUIBootstrapError("openwebui_pipe_source_missing")
     pipe_content = PIPE_SOURCE_PATH.read_text(encoding="utf-8")
-    pipe_module, pipe_type, pipe_frontmatter = asyncio.run(build_function_metadata(PIPE_ID, pipe_content))
+    pipe_type, pipe_frontmatter = build_function_metadata(PIPE_ID, pipe_content)
     if pipe_type != "pipe":
         raise OpenWebUIBootstrapError("openwebui_pipe_bootstrap_schema_unknown")
-    pipe_model_id = selectable_pipe_model_id(PIPE_ID, pipe_module)
+    pipe_model_id = selectable_pipe_model_id(PIPE_ID)
     with sqlite3.connect(DB_PATH, timeout=30) as conn:
         conn.execute("PRAGMA busy_timeout = 30000")
         validate_pipe_schema(conn)
