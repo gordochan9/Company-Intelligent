@@ -53,7 +53,7 @@ services:
       - project3-network
 
   openwebui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui@sha256:7f1b0a1a50cfbac23da3b16f96bc968fd757b26dc9e54e93813d61768ea9184e
     profiles: ["openwebui"]
     environment:
       WEBUI_AUTH: "true"
@@ -80,7 +80,7 @@ services:
       - project3-network
 
   openwebui-bootstrap:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui@sha256:7f1b0a1a50cfbac23da3b16f96bc968fd757b26dc9e54e93813d61768ea9184e
     profiles: ["openwebui"]
     command: ["python", "/bootstrap/bootstrap_openwebui.py"]
     environment:
