@@ -197,6 +197,9 @@ function Start-Demo {
   if ($LASTEXITCODE -ne 0) { throw "docker_compose_up_failed" }
   $healthBaseUrl = Get-ConfigValue $config "ORCHESTRATOR_API_BASE_URL" "http://127.0.0.1:8003"
   Wait-HttpOk ($healthBaseUrl.TrimEnd("/") + "/health")
+  if ($openWebUiEnabled) {
+    Wait-HttpOk (Get-ConfigValue $config "OPENWEBUI_BASE_URL" "http://127.0.0.1:8002") 180
+  }
   if ((Get-ConfigValue $config "PROJECT3_SKIP_STARTUP_SMOKE" "false") -ne "true") {
     & python (Join-Path $RepoRoot "scripts/smoke_project30_demo.py")
     if ($LASTEXITCODE -ne 0) { throw "startup_smoke_failed" }

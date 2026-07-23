@@ -76,6 +76,11 @@ services:
       - "${OPENWEBUI_PORT:-8002}:8080"
     volumes:
       - project3-openwebui-data:/app/backend/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080', timeout=3).read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
     networks:
       - project3-network
 
@@ -107,7 +112,7 @@ services:
       - ./openwebui_functions:/function_source:ro
     depends_on:
       openwebui:
-        condition: service_started
+        condition: service_healthy
     networks:
       - project3-network
 

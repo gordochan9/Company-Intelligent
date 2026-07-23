@@ -205,7 +205,7 @@ def _pipe_mock_reaches_backend() -> bool:
     return (
         result == "ok"
         and captured.get("url") == "http://mock-backend/openwebui/ask"
-        and captured.get("body") == {"question": "local smoke"}
+        and captured.get("body") == {"question": "local smoke", "messages": [{"role": "user", "content": "local smoke"}]}
     )
 
 
