@@ -166,6 +166,13 @@ function Wait-HttpOk($Url, $Seconds = 60) {
   throw "http_wait_failed"
 }
 
+function Write-DockerDiagnostics {
+  foreach ($service in @("openwebui", "openwebui-bootstrap", "orchestrator-api", "postgres")) {
+    Write-Step "docker logs" "info" $service
+    & docker compose logs --tail 120 $service
+  }
+}
+
 function Start-Demo {
   Set-Location $RepoRoot
   $created = Write-DotEnvIfMissing
@@ -194,7 +201,10 @@ function Start-Demo {
   } else {
     & docker compose up -d --build
   }
-  if ($LASTEXITCODE -ne 0) { throw "docker_compose_up_failed" }
+  if ($LASTEXITCODE -ne 0) {
+    Write-DockerDiagnostics
+    throw "docker_compose_up_failed"
+  }
   $healthBaseUrl = Get-ConfigValue $config "ORCHESTRATOR_API_BASE_URL" "http://127.0.0.1:8003"
   Wait-HttpOk ($healthBaseUrl.TrimEnd("/") + "/health")
   if ($openWebUiEnabled) {
@@ -202,7 +212,10 @@ function Start-Demo {
   }
   if ((Get-ConfigValue $config "PROJECT3_SKIP_STARTUP_SMOKE" "false") -ne "true") {
     & python (Join-Path $RepoRoot "scripts/smoke_project30_demo.py")
-    if ($LASTEXITCODE -ne 0) { throw "startup_smoke_failed" }
+    if ($LASTEXITCODE -ne 0) {
+      Write-DockerDiagnostics
+      throw "startup_smoke_failed"
+    }
   }
   if ($openWebUiEnabled -and (Get-ConfigValue $config "PROJECT3_SKIP_BROWSER_OPEN" "false") -ne "true") {
     Start-Process (Get-ConfigValue $config "OPENWEBUI_BASE_URL" "http://127.0.0.1:8002")
